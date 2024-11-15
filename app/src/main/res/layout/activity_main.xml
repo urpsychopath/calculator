@@ -208,7 +208,7 @@
 
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/buttonNegate"
-                android:layout_width="99dp"
+                android:layout_width="78dp"
                 android:layout_height="72dp"
                 android:layout_margin="12dp"
                 android:text="+/-"

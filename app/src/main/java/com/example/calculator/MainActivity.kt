@@ -21,13 +21,12 @@ class MainActivity : AppCompatActivity() {
 
         display = findViewById(R.id.display)
 
-        // Restaurer l'état après rotation
         if (savedInstanceState != null) {
             expression = savedInstanceState.getString("expression") ?: ""
             display.text = expression
         }
 
-        // Configuration du double clic pour copier
+
         display.setOnDoubleClickListener {
             copyToClipboard()
         }
@@ -63,7 +62,7 @@ class MainActivity : AppCompatActivity() {
         findViewById<Button>(R.id.buttonNegate).setOnClickListener { negateLastNumber() }
     }
 
-    // Sauvegarde de l'état pour la rotation
+
     override fun onSaveInstanceState(outState: Bundle) {
         super.onSaveInstanceState(outState)
         outState.putString("expression", expression)
@@ -77,11 +76,10 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun appendToExpression(value: String) {
-        // Éviter deux opérateurs consécutifs
+
         if (value.isOperator() && expression.lastOrNull()?.toString()?.isOperator() == true) {
             return
         }
-        // Éviter de commencer par un opérateur (sauf le moins)
         if (expression.isEmpty() && value.isOperator() && value != "-") {
             return
         }
@@ -92,16 +90,15 @@ class MainActivity : AppCompatActivity() {
 
     private fun deleteLastChar() {
         if (expression.isNotEmpty()) {
-            var lastIndex = expression.length - 1
-            if (expression[lastIndex] == '-' && lastIndex > 0 && expression[lastIndex - 1].isDigit()) {
-                // Supprime le signe moins en même temps que le seul chiffre d'un nombre négatif
-                lastIndex--
+            val lastChar = expression.last()
+            expression = expression.dropLast(1)
+
+            if (lastChar.isDigit() && expression.lastOrNull() == '-') {
+                expression = expression.dropLast(1)
             }
-            expression = expression.substring(0, lastIndex)
             display.text = expression
         }
     }
-
     private fun clearAll() {
         expression = ""
         display.text = ""
@@ -161,40 +158,52 @@ class MainActivity : AppCompatActivity() {
     private fun formatExpression(expr: String): String {
         return try {
             val number = BigDecimal(expr)
-            // On arrondit à 2 décimales maximum
-            number.setScale(2, RoundingMode.HALF_UP).toString()
+            if (number.scale() > 0 && number.stripTrailingZeros().scale() <= 0) {
+                // Convertir en entier si aucune décimale significative n'existe
+                number.toBigInteger().toString()
+            } else {
+                // Sinon, arrondir à 2 décimales
+                number.setScale(2, RoundingMode.HALF_UP).stripTrailingZeros().toPlainString()
+            }
         } catch (e: NumberFormatException) {
-            // Si ce n'est pas un nombre, on retourne tel quel
-            expr
+            expr // Si ce n'est pas un nombre, retourner tel quel
         }
     }
 
     private fun negateLastNumber() {
         if (expression.isNotEmpty()) {
-            val operatorIndex = expression.indexOfLast { it in "+-*/%" }
-            val lastNumber = if (operatorIndex == -1) {
-                expression
+            val lastOperatorIndex = findLastOperator(expression)
+            val startIndex = if (lastOperatorIndex == -1) 0 else lastOperatorIndex + 1
+
+            val lastPart = expression.substring(startIndex)
+
+            val minusCount = lastPart.takeWhile { it == '-' }.count()
+
+            val numberPart = lastPart.dropWhile { it == '-' }
+
+            val newNumber = if (minusCount % 2 == 0) {
+                "-$numberPart"
             } else {
-                expression.substring(operatorIndex + 1)
+                numberPart
             }
 
-            if (lastNumber.isNotEmpty()) {
-                val negatedValue = if (lastNumber.startsWith("-")) {
-                    lastNumber.substring(1)
-                } else {
-                    "-$lastNumber"
-                }
-
-                expression = if (operatorIndex == -1) {
-                    negatedValue
-                } else {
-                    expression.substring(0, operatorIndex + 1) + negatedValue
-                }
-            }
-            display.text = formatExpression(expression)
+            expression = expression.substring(0, startIndex) + newNumber
+            display.text = expression
         }
     }
 
+
+    private fun findLastOperator(expr: String): Int {
+        for (i in expr.length - 1 downTo 0) {
+            if (expr[i] in "+-*/") {
+                // Vérifie si c'est un opérateur et non un signe unaire
+                if (i > 0 && expr[i-1].isDigit()) {
+                    return i
+                }
+            }
+        }
+        return -1
+    }
     private fun tokenizeExpression(expr: String): List<String> {
         val tokens = mutableListOf<String>()
         var currentNumber = StringBuilder()
